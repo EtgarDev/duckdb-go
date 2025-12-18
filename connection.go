@@ -82,7 +82,9 @@ func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.
 	cleanupCtx := conn.setContext(ctx)
 	defer cleanupCtx()
 
+	println(`QueryContext - prepareStmts`)
 	prepared, err := conn.prepareStmts(ctx, query)
+	println(`QueryContext - done prepareStmts`)
 	if err != nil {
 		return nil, err
 	}
@@ -204,12 +206,15 @@ func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error)
 		return nil, errClosedCon
 	}
 
+	println(`Extracting statements from query`)
 	stmts, count, errExtract := conn.extractStmts(query)
+	println(`Done extracting statements from query`)
 	if errExtract != nil {
 		return nil, errExtract
 	}
 	defer mapping.DestroyExtracted(stmts)
 
+	println(`Preparing statements`)
 	for i := mapping.IdxT(0); i < count-1; i++ {
 		preparedStmt, err := conn.prepareExtractedStmt(*stmts, i)
 		if err != nil {
@@ -226,7 +231,10 @@ func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error)
 			return nil, closeErr
 		}
 	}
+	println(`Done preparing statements`)
 
+	println(`Preparing last statement`)
+	defer println(`Done preparing last statement`)
 	return conn.prepareExtractedStmt(*stmts, count-1)
 }
 

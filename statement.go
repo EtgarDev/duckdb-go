@@ -321,6 +321,7 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 	// For some queries, we cannot resolve the parameter type when preparing the query.
 	// E.g., for "SELECT * FROM (VALUES (?, ?)) t(a, b)", we cannot know the parameter types from the SQL statement alone.
 	// For these cases, ParamType returns TYPE_INVALID.
+	println("Debug - binding value parameter", n+1)
 	t, err := s.ParamType(n + 1)
 	if err != nil {
 		return mapping.StateError, err
@@ -420,6 +421,7 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 
 	// relaxed length check allow for unused parameters.
 	for i := range s.NumInput() {
+		println("Debug - binding parameter", i+1)
 		name := mapping.ParameterName(*s.preparedStmt, mapping.IdxT(i+1))
 
 		// fallback on index position
@@ -445,7 +447,9 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 			err = errors.Join(err, getDuckDBError(errMsg))
 			return errors.Join(errCouldNotBind, err)
 		}
+		println("Debug - bound parameter", i+1)
 	}
+	println("Debug - bound parameters")
 
 	s.bound = true
 	return nil
@@ -577,11 +581,14 @@ func (s *Stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (dri
 	cleanupCtx := s.conn.setContext(ctx)
 	defer cleanupCtx()
 
+	println("Debug - executing Stmt.execute")
 	res, err := s.execute(ctx, nargs)
 	if err != nil {
 		return nil, err
 	}
 	s.rows = true
+	println("Debug - returning newRowsWithStmt")
+	defer println("Debug - returning newRowsWithStmt done")
 	return newRowsWithStmt(*res, s), nil
 }
 
@@ -620,14 +627,20 @@ func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*mapping.
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext with active Rows")
 	}
 
+	println("Debug - binding query for Stmt.execute")
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
+
+	println("Debug - calling executeBound for Stmt.execute")
+	defer println("Debug - calling executeBound for Stmt.execute done")
 	return s.executeBound(ctx)
 }
 
 func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
 	var pendingRes mapping.PendingResult
+
+	println("Debug - creating pending query for Stmt.executeBound")
 	if mapping.PendingPrepared(*s.preparedStmt, &pendingRes) == mapping.StateError {
 		dbErr := getDuckDBError(mapping.PendingError(pendingRes))
 		mapping.DestroyPending(&pendingRes)
@@ -653,6 +666,7 @@ func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
 		close(bgDoneCh)
 	}()
 
+	println("Debug - executing pending query for Stmt.executeBound")
 	var res mapping.Result
 	state := mapping.ExecutePending(pendingRes, &res)
 
